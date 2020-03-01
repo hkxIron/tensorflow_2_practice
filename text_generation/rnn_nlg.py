@@ -24,9 +24,19 @@ class RNN(tf.keras.Model):
         else:
             return tf.nn.softmax(logits)
 
+"""
+关于文本生成的过程有一点需要特别注意。之前，我们一直使用 tf.argmax() 函数，将对应概率最
+大的值作为预测值。然而对于文本生成而言，这样的预测方式过于绝对，会使得生成的文本失去丰富
+性。
+于是，我们使用 np.random.choice() 函数按照生成的概率分布取样。这样，即使是对应概率较小的
+字符，也有机会被取样到。同时，我们加入一个 temperature 参数控制分布的形状，参数值越大则
+分布越平缓（最大值和最小值的差值越小），生成文本的丰富度越高；参数值越小则分布越陡峭，生
+成文本的丰富度越低。
+"""
     def predict(self, inputs, temperature=1.):
         batch_size, _ = tf.shape(inputs)
         logits = self(inputs, from_logits=True)
+        # 生成预测的时候,原来是按照概率来采样分布, 原来如此,注意,是在exp之前 , temperature越高, 分布越平滑
         prob = tf.nn.softmax(logits / temperature).numpy()
         return np.array([np.random.choice(self.num_chars, p=prob[i, :])
                          for i in range(batch_size.numpy())])
@@ -50,7 +60,7 @@ class DataLoader():
             index = np.random.randint(0, len(self.text) - seq_length)
             seq.append(self.text[index:index+seq_length])
             next_char.append(self.text[index+seq_length])
-        return np.array(seq), np.array(next_char)       # [batch_size, seq_length], [num_batch]
+        return np.array(seq), np.array(next_char)  # [batch_size, seq_length], [batch_size]
 
 
 if __name__ == '__main__':
@@ -77,6 +87,7 @@ if __name__ == '__main__':
         X = X_
         print("diversity %f:" % diversity)
         for t in range(400):
+            #通过这种方式进行 “滚雪球” 式的连续预测，即可得到生成文本。
             y_pred = model.predict(X, diversity)
             print(data_loader.indices_char[y_pred[0]], end='', flush=True)
             X = np.concatenate([X[:, 1:], np.expand_dims(y_pred, axis=1)], axis=-1)
